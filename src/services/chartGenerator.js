@@ -58,19 +58,56 @@ export const aggregationLabels = {
 }
 
 /**
+ * ソート関数
+ * @param {Array} categories - カテゴリ配列
+ * @param {Array} values - 値配列（categoriesと同じ順序）
+ * @param {string} sortBy - ソート方法 ('none', 'value_asc', 'value_desc', 'label_asc', 'label_desc')
+ * @returns {Object} - { sortedCategories, sortedValues }
+ */
+function sortData(categories, values, sortBy = 'none') {
+  if (sortBy === 'none' || !sortBy) {
+    return { sortedCategories: categories, sortedValues: values }
+  }
+
+  const pairs = categories.map((cat, i) => ({ cat, val: values[i] }))
+
+  switch (sortBy) {
+    case 'value_asc':
+      pairs.sort((a, b) => a.val - b.val)
+      break
+    case 'value_desc':
+      pairs.sort((a, b) => b.val - a.val)
+      break
+    case 'label_asc':
+      pairs.sort((a, b) => String(a.cat).localeCompare(String(b.cat), 'ja'))
+      break
+    case 'label_desc':
+      pairs.sort((a, b) => String(b.cat).localeCompare(String(a.cat), 'ja'))
+      break
+  }
+
+  return {
+    sortedCategories: pairs.map(p => p.cat),
+    sortedValues: pairs.map(p => p.val)
+  }
+}
+
+/**
  * 棒グラフオプション生成
  * @param {Object} config - 設定
  * @param {string} config.xAxis - X軸カラム
  * @param {string} config.yAxis - Y軸カラム（集計対象）
  * @param {string} config.groupBy - グループ化カラム（系列分割）
  * @param {string} config.stackMode - 積み上げモード ('none', 'stacked', 'percent')
+ * @param {string} config.sortBy - ソート方法
+ * @param {boolean} config.enableZoom - ズーム有効化
  * @param {Array} data - データ
  */
 export function generateBarOptions(config, data) {
-  const { xAxis, yAxis, title, horizontal = false, aggregation = 'sum', groupBy = '', stackMode = 'none' } = config
+  const { xAxis, yAxis, title, horizontal = false, aggregation = 'sum', groupBy = '', stackMode = 'none', sortBy = 'none', enableZoom = false } = config
 
   // X軸のユニーク値を取得
-  const categories = [...new Set(data.map(row => row[xAxis]))]
+  let categories = [...new Set(data.map(row => row[xAxis]))]
 
   // タイトル生成
   const aggLabel = aggregationLabels[aggregation] || aggregation
@@ -154,10 +191,15 @@ export function generateBarOptions(config, data) {
   }
 
   // グループ化なしの場合（従来の処理）
-  const values = categories.map(cat => {
+  let values = categories.map(cat => {
     const rows = data.filter(row => row[xAxis] === cat)
     return aggregate(rows, yAxis, aggregation)
   })
+
+  // ソート適用
+  const sorted = sortData(categories, values, sortBy)
+  categories = sorted.sortedCategories
+  values = sorted.sortedValues
 
   const chartTitle = title || `${yAxis}の${aggLabel} (${xAxis}別)`
 
@@ -180,15 +222,25 @@ export function generateBarOptions(config, data) {
     grid: {
       left: '3%',
       right: '4%',
-      bottom: '3%',
+      bottom: enableZoom ? '15%' : '3%',
       containLabel: true
     },
     color: colorPalette,
     toolbox: {
       feature: {
-        saveAsImage: { title: '画像保存' }
+        saveAsImage: { title: '画像保存' },
+        dataZoom: enableZoom ? { title: { zoom: 'ズーム', back: 'リセット' } } : undefined,
+        restore: { title: 'リセット' }
       }
     }
+  }
+
+  // ズーム機能
+  if (enableZoom) {
+    option.dataZoom = [
+      { type: 'slider', show: true, xAxisIndex: [0], start: 0, end: 100 },
+      { type: 'inside', xAxisIndex: [0], start: 0, end: 100 }
+    ]
   }
 
   if (horizontal) {
@@ -208,11 +260,13 @@ export function generateBarOptions(config, data) {
  * 折れ線グラフオプション生成
  * @param {Object} config - 設定
  * @param {string} config.groupBy - グループ化カラム（系列分割）
+ * @param {string} config.sortBy - ソート方法
+ * @param {boolean} config.enableZoom - ズーム有効化
  */
 export function generateLineOptions(config, data) {
-  const { xAxis, yAxis, title, smooth = true, aggregation = 'sum', groupBy = '' } = config
+  const { xAxis, yAxis, title, smooth = true, aggregation = 'sum', groupBy = '', sortBy = 'none', enableZoom = false } = config
 
-  const categories = [...new Set(data.map(row => row[xAxis]))]
+  let categories = [...new Set(data.map(row => row[xAxis]))]
   const aggLabel = aggregationLabels[aggregation] || aggregation
 
   // グループ化がある場合
@@ -282,14 +336,19 @@ export function generateLineOptions(config, data) {
   }
 
   // グループ化なしの場合（従来の処理）
-  const values = categories.map(cat => {
+  let values = categories.map(cat => {
     const rows = data.filter(row => row[xAxis] === cat)
     return aggregate(rows, yAxis, aggregation)
   })
 
+  // ソート適用
+  const sorted = sortData(categories, values, sortBy)
+  categories = sorted.sortedCategories
+  values = sorted.sortedValues
+
   const chartTitle = title || `${yAxis}の${aggLabel} (${xAxis}別)`
 
-  return {
+  const option = {
     title: {
       text: chartTitle,
       left: 'center'
@@ -307,13 +366,15 @@ export function generateLineOptions(config, data) {
     grid: {
       left: '3%',
       right: '4%',
-      bottom: '3%',
+      bottom: enableZoom ? '15%' : '3%',
       containLabel: true
     },
     color: colorPalette,
     toolbox: {
       feature: {
-        saveAsImage: { title: '画像保存' }
+        saveAsImage: { title: '画像保存' },
+        dataZoom: enableZoom ? { title: { zoom: 'ズーム', back: 'リセット' } } : undefined,
+        restore: { title: 'リセット' }
       }
     },
     xAxis: {
@@ -331,6 +392,16 @@ export function generateLineOptions(config, data) {
       areaStyle: config.area ? {} : undefined
     }]
   }
+
+  // ズーム機能
+  if (enableZoom) {
+    option.dataZoom = [
+      { type: 'slider', show: true, xAxisIndex: [0], start: 0, end: 100 },
+      { type: 'inside', xAxisIndex: [0], start: 0, end: 100 }
+    ]
+  }
+
+  return option
 }
 
 /**

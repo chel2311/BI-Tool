@@ -100,6 +100,29 @@
             </select>
           </div>
 
+          <!-- ソート -->
+          <div v-if="chartConfig.type !== 'pie' && chartConfig.type !== 'scatter' && !chartConfig.groupBy">
+            <label class="block text-sm font-medium text-gray-700 mb-1">並び順</label>
+            <select v-model="chartConfig.sortBy" class="select-box">
+              <option value="none">データ順</option>
+              <option value="value_desc">値（大→小）</option>
+              <option value="value_asc">値（小→大）</option>
+              <option value="label_asc">ラベル（昇順）</option>
+              <option value="label_desc">ラベル（降順）</option>
+            </select>
+          </div>
+
+          <!-- ズーム有効化 -->
+          <div v-if="chartConfig.type !== 'pie' && chartConfig.type !== 'scatter'" class="flex items-center">
+            <input
+              type="checkbox"
+              id="enableZoom"
+              v-model="chartConfig.enableZoom"
+              class="h-4 w-4 text-primary-600 border-gray-300 rounded"
+            />
+            <label for="enableZoom" class="ml-2 text-sm text-gray-700">ズーム有効</label>
+          </div>
+
           <!-- タイトル -->
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">タイトル</label>
@@ -154,6 +177,12 @@
           <button @click="exportPNG" class="btn-primary w-full text-sm">
             PNG画像として保存
           </button>
+          <button @click="handleExportExcel" class="btn-secondary w-full text-sm">
+            集計データをExcel出力
+          </button>
+          <button @click="handleExportCSV" class="btn-secondary w-full text-sm">
+            フィルタ済みデータをCSV出力
+          </button>
         </div>
       </div>
     </aside>
@@ -205,6 +234,7 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useDataStore } from '@/stores/dataStore'
 import { generateChartOptions } from '@/services/chartGenerator'
+import { exportToExcel, exportToCSV, exportAggregatedToExcel } from '@/services/exportService'
 import * as echarts from 'echarts'
 
 const dataStore = useDataStore()
@@ -220,7 +250,9 @@ const chartConfig = ref({
   title: '',
   aggregation: 'sum',
   groupBy: '',
-  stackMode: 'none'
+  stackMode: 'none',
+  sortBy: 'none',
+  enableZoom: false
 })
 
 // フィルター
@@ -296,7 +328,9 @@ function updateChart() {
     title: chartConfig.value.title,
     aggregation: chartConfig.value.aggregation,
     groupBy: chartConfig.value.groupBy,
-    stackMode: chartConfig.value.stackMode
+    stackMode: chartConfig.value.stackMode,
+    sortBy: chartConfig.value.sortBy,
+    enableZoom: chartConfig.value.enableZoom
   }
 
   const options = generateChartOptions(chartConfig.value.type, config, filteredData.value)
@@ -315,6 +349,21 @@ function exportPNG() {
   link.href = url
   link.download = `chart_${Date.now()}.png`
   link.click()
+}
+
+// Excel出力（集計データ）
+function handleExportExcel() {
+  if (!chartConfig.value.xAxis || !chartConfig.value.yAxis) {
+    alert('チャート設定を完了してください')
+    return
+  }
+  exportAggregatedToExcel(chartConfig.value, filteredData.value, `aggregated_${Date.now()}`)
+}
+
+// CSV出力（フィルタ済みデータ）
+function handleExportCSV() {
+  if (!activeDataset.value) return
+  exportToCSV(filteredData.value, columns.value, `data_${Date.now()}`)
 }
 
 // リサイズ対応
