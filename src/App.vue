@@ -16,6 +16,9 @@
           <router-link to="/analysis" class="hover:text-primary-200 transition-colors">
             分析
           </router-link>
+          <router-link to="/dashboard" class="hover:text-primary-200 transition-colors">
+            ダッシュボード
+          </router-link>
         </nav>
       </div>
     </header>
