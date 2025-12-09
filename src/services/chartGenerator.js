@@ -9,6 +9,93 @@ const colorPalette = [
 ]
 
 /**
+ * 日付単位変換のラベル
+ */
+export const dateUnitLabels = {
+  none: 'そのまま',
+  year: '年',
+  quarter: '四半期',
+  month: '月',
+  week: '週',
+  day: '日',
+  weekday: '曜日',
+  hour: '時'
+}
+
+/**
+ * 曜日名
+ */
+const weekdayNames = ['日', '月', '火', '水', '木', '金', '土']
+
+/**
+ * 日付を指定単位に変換
+ * @param {Date|string|number} dateValue - 日付値
+ * @param {string} unit - 変換単位 ('year', 'quarter', 'month', 'week', 'day', 'weekday', 'hour')
+ * @returns {string} - 変換後の文字列
+ */
+export function convertDateUnit(dateValue, unit) {
+  if (!dateValue || unit === 'none') return dateValue
+
+  let date
+  if (dateValue instanceof Date) {
+    date = dateValue
+  } else if (typeof dateValue === 'number') {
+    // Excelシリアル値の可能性
+    if (dateValue > 25569 && dateValue < 50000) {
+      date = new Date((dateValue - 25569) * 86400 * 1000)
+    } else {
+      date = new Date(dateValue)
+    }
+  } else {
+    date = new Date(dateValue)
+  }
+
+  if (isNaN(date.getTime())) return dateValue
+
+  switch (unit) {
+    case 'year':
+      return `${date.getFullYear()}年`
+    case 'quarter':
+      const quarter = Math.floor(date.getMonth() / 3) + 1
+      return `${date.getFullYear()}年Q${quarter}`
+    case 'month':
+      return `${date.getFullYear()}年${date.getMonth() + 1}月`
+    case 'week':
+      // ISO週番号を計算
+      const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
+      const dayNum = d.getUTCDay() || 7
+      d.setUTCDate(d.getUTCDate() + 4 - dayNum)
+      const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
+      const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7)
+      return `${date.getFullYear()}年第${weekNo}週`
+    case 'day':
+      return `${date.getMonth() + 1}/${date.getDate()}`
+    case 'weekday':
+      return `${weekdayNames[date.getDay()]}曜日`
+    case 'hour':
+      return `${date.getHours()}時`
+    default:
+      return dateValue
+  }
+}
+
+/**
+ * データに日付単位変換を適用
+ * @param {Array} data - 元データ
+ * @param {string} column - 対象カラム
+ * @param {string} unit - 変換単位
+ * @returns {Array} - 変換後のデータ（新しい配列）
+ */
+export function applyDateUnitConversion(data, column, unit) {
+  if (!unit || unit === 'none') return data
+
+  return data.map(row => ({
+    ...row,
+    [column]: convertDateUnit(row[column], unit)
+  }))
+}
+
+/**
  * 集計関数
  * @param {Array} rows - 集計対象の行
  * @param {string} column - 集計対象のカラム

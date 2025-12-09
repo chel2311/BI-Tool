@@ -45,6 +45,17 @@
             </select>
           </div>
 
+          <!-- 日付単位変換（X軸選択時のみ） -->
+          <div v-if="chartConfig.xAxis && isDateColumn(chartConfig.xAxis)">
+            <label class="block text-sm font-medium text-gray-700 mb-1">
+              日付単位
+              <span class="text-xs text-gray-500">（時系列集計）</span>
+            </label>
+            <select v-model="chartConfig.xAxisDateUnit" class="select-box">
+              <option v-for="(label, key) in dateUnitLabels" :key="key" :value="key">{{ label }}</option>
+            </select>
+          </div>
+
           <!-- Y軸 / 値 -->
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">
@@ -236,7 +247,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useDataStore } from '@/stores/dataStore'
-import { generateChartOptions } from '@/services/chartGenerator'
+import { generateChartOptions, dateUnitLabels, applyDateUnitConversion } from '@/services/chartGenerator'
 import { exportToExcel, exportToCSV, exportAggregatedToExcel, exportChartToPowerPoint } from '@/services/exportService'
 import * as echarts from 'echarts'
 
@@ -255,7 +266,8 @@ const chartConfig = ref({
   groupBy: '',
   stackMode: 'none',
   sortBy: 'none',
-  enableZoom: false
+  enableZoom: false,
+  xAxisDateUnit: 'none'  // 日付単位変換
 })
 
 // フィルター
@@ -281,6 +293,21 @@ const filteredData = computed(() => {
 
 // プレビュー用データ（最大100行）
 const previewData = computed(() => filteredData.value.slice(0, 100))
+
+// 日付カラムかどうか判定
+function isDateColumn(column) {
+  if (!activeDataset.value?.types) return false
+  return activeDataset.value.types[column] === 'date'
+}
+
+// 日付単位変換を適用したデータ
+const chartData = computed(() => {
+  let data = filteredData.value
+  if (chartConfig.value.xAxisDateUnit && chartConfig.value.xAxisDateUnit !== 'none' && chartConfig.value.xAxis) {
+    data = applyDateUnitConversion(data, chartConfig.value.xAxis, chartConfig.value.xAxisDateUnit)
+  }
+  return data
+})
 
 // ユニーク値取得
 function getUniqueValues(column) {
@@ -336,7 +363,7 @@ function updateChart() {
     enableZoom: chartConfig.value.enableZoom
   }
 
-  const options = generateChartOptions(chartConfig.value.type, config, filteredData.value)
+  const options = generateChartOptions(chartConfig.value.type, config, chartData.value)
   chartInstance.setOption(options, true)
 }
 
@@ -384,7 +411,7 @@ function handleResize() {
 }
 
 // ウォッチ
-watch([chartConfig, filteredData], () => {
+watch([chartConfig, chartData], () => {
   nextTick(updateChart)
 }, { deep: true })
 
