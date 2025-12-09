@@ -59,21 +59,106 @@ export const aggregationLabels = {
 
 /**
  * 棒グラフオプション生成
+ * @param {Object} config - 設定
+ * @param {string} config.xAxis - X軸カラム
+ * @param {string} config.yAxis - Y軸カラム（集計対象）
+ * @param {string} config.groupBy - グループ化カラム（系列分割）
+ * @param {string} config.stackMode - 積み上げモード ('none', 'stacked', 'percent')
+ * @param {Array} data - データ
  */
 export function generateBarOptions(config, data) {
-  const { xAxis, yAxis, title, horizontal = false, aggregation = 'sum' } = config
+  const { xAxis, yAxis, title, horizontal = false, aggregation = 'sum', groupBy = '', stackMode = 'none' } = config
 
   // X軸のユニーク値を取得
   const categories = [...new Set(data.map(row => row[xAxis]))]
 
-  // Y軸の値を集計
+  // タイトル生成
+  const aggLabel = aggregationLabels[aggregation] || aggregation
+
+  // グループ化がある場合
+  if (groupBy && groupBy !== '') {
+    const groups = [...new Set(data.map(row => row[groupBy]))]
+    const chartTitle = title || `${yAxis}の${aggLabel} (${xAxis}別・${groupBy}分類)`
+
+    // 各グループごとにシリーズを作成
+    const series = groups.map(group => {
+      const values = categories.map(cat => {
+        const rows = data.filter(row => row[xAxis] === cat && row[groupBy] === group)
+        return aggregate(rows, yAxis, aggregation)
+      })
+      return {
+        name: String(group),
+        type: 'bar',
+        data: values,
+        stack: stackMode !== 'none' ? 'total' : undefined
+      }
+    })
+
+    // 100%積み上げの場合、値を割合に変換
+    if (stackMode === 'percent') {
+      categories.forEach((_, catIndex) => {
+        const total = series.reduce((sum, s) => sum + (s.data[catIndex] || 0), 0)
+        if (total > 0) {
+          series.forEach(s => {
+            s.data[catIndex] = (s.data[catIndex] / total) * 100
+          })
+        }
+      })
+    }
+
+    const option = {
+      title: {
+        text: chartTitle,
+        left: 'center'
+      },
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: { type: 'shadow' },
+        formatter: (params) => {
+          let result = params[0].name + '<br/>'
+          params.forEach(p => {
+            const formattedValue = typeof p.value === 'number'
+              ? p.value.toLocaleString('ja-JP', { maximumFractionDigits: 2 })
+              : p.value
+            const suffix = stackMode === 'percent' ? '%' : ''
+            result += `${p.marker}${p.seriesName}: ${formattedValue}${suffix}<br/>`
+          })
+          return result
+        }
+      },
+      legend: {
+        data: groups.map(String),
+        top: 30
+      },
+      grid: {
+        left: '3%',
+        right: '4%',
+        bottom: '3%',
+        top: 80,
+        containLabel: true
+      },
+      color: colorPalette,
+      toolbox: {
+        feature: {
+          saveAsImage: { title: '画像保存' }
+        }
+      },
+      xAxis: horizontal ? { type: 'value' } : { type: 'category', data: categories },
+      yAxis: horizontal
+        ? { type: 'category', data: categories }
+        : { type: 'value', axisLabel: stackMode === 'percent' ? { formatter: '{value}%' } : undefined },
+      series
+    }
+
+    return option
+  }
+
+  // グループ化なしの場合（従来の処理）
   const values = categories.map(cat => {
     const rows = data.filter(row => row[xAxis] === cat)
     return aggregate(rows, yAxis, aggregation)
   })
 
-  // タイトル生成
-  const aggLabel = aggregationLabels[aggregation] || aggregation
   const chartTitle = title || `${yAxis}の${aggLabel} (${xAxis}別)`
 
   const option = {
@@ -121,17 +206,87 @@ export function generateBarOptions(config, data) {
 
 /**
  * 折れ線グラフオプション生成
+ * @param {Object} config - 設定
+ * @param {string} config.groupBy - グループ化カラム（系列分割）
  */
 export function generateLineOptions(config, data) {
-  const { xAxis, yAxis, title, smooth = true, aggregation = 'sum' } = config
+  const { xAxis, yAxis, title, smooth = true, aggregation = 'sum', groupBy = '' } = config
 
   const categories = [...new Set(data.map(row => row[xAxis]))]
+  const aggLabel = aggregationLabels[aggregation] || aggregation
+
+  // グループ化がある場合
+  if (groupBy && groupBy !== '') {
+    const groups = [...new Set(data.map(row => row[groupBy]))]
+    const chartTitle = title || `${yAxis}の${aggLabel} (${xAxis}別・${groupBy}分類)`
+
+    const series = groups.map(group => {
+      const values = categories.map(cat => {
+        const rows = data.filter(row => row[xAxis] === cat && row[groupBy] === group)
+        return aggregate(rows, yAxis, aggregation)
+      })
+      return {
+        name: String(group),
+        type: 'line',
+        data: values,
+        smooth,
+        areaStyle: config.area ? {} : undefined
+      }
+    })
+
+    return {
+      title: {
+        text: chartTitle,
+        left: 'center'
+      },
+      tooltip: {
+        trigger: 'axis',
+        formatter: (params) => {
+          let result = params[0].name + '<br/>'
+          params.forEach(p => {
+            const formattedValue = typeof p.value === 'number'
+              ? p.value.toLocaleString('ja-JP', { maximumFractionDigits: 2 })
+              : p.value
+            result += `${p.marker}${p.seriesName}: ${formattedValue}<br/>`
+          })
+          return result
+        }
+      },
+      legend: {
+        data: groups.map(String),
+        top: 30
+      },
+      grid: {
+        left: '3%',
+        right: '4%',
+        bottom: '3%',
+        top: 80,
+        containLabel: true
+      },
+      color: colorPalette,
+      toolbox: {
+        feature: {
+          saveAsImage: { title: '画像保存' }
+        }
+      },
+      xAxis: {
+        type: 'category',
+        data: categories,
+        boundaryGap: false
+      },
+      yAxis: {
+        type: 'value'
+      },
+      series
+    }
+  }
+
+  // グループ化なしの場合（従来の処理）
   const values = categories.map(cat => {
     const rows = data.filter(row => row[xAxis] === cat)
     return aggregate(rows, yAxis, aggregation)
   })
 
-  const aggLabel = aggregationLabels[aggregation] || aggregation
   const chartTitle = title || `${yAxis}の${aggLabel} (${xAxis}別)`
 
   return {

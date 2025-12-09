@@ -69,6 +69,28 @@
             </select>
           </div>
 
+          <!-- グループ化（系列分割） -->
+          <div v-if="chartConfig.type === 'bar' || chartConfig.type === 'line' || chartConfig.type === 'area'">
+            <label class="block text-sm font-medium text-gray-700 mb-1">
+              グループ化
+              <span class="text-xs text-gray-500">（系列分割）</span>
+            </label>
+            <select v-model="chartConfig.groupBy" class="select-box">
+              <option value="">なし</option>
+              <option v-for="col in columns.filter(c => c !== chartConfig.xAxis)" :key="col" :value="col">{{ col }}</option>
+            </select>
+          </div>
+
+          <!-- 積み上げモード（棒グラフ＋グループ化時のみ） -->
+          <div v-if="chartConfig.type === 'bar' && chartConfig.groupBy">
+            <label class="block text-sm font-medium text-gray-700 mb-1">表示モード</label>
+            <select v-model="chartConfig.stackMode" class="select-box">
+              <option value="none">並列（グループ化）</option>
+              <option value="stacked">積み上げ</option>
+              <option value="percent">100%積み上げ</option>
+            </select>
+          </div>
+
           <!-- 組合せチャート用 -->
           <div v-if="chartConfig.type === 'combo'">
             <label class="block text-sm font-medium text-gray-700 mb-1">折れ線（Y軸2）</label>
@@ -196,7 +218,9 @@ const chartConfig = ref({
   yAxis: '',
   lineAxis: '',
   title: '',
-  aggregation: 'sum'
+  aggregation: 'sum',
+  groupBy: '',
+  stackMode: 'none'
 })
 
 // フィルター
@@ -270,7 +294,9 @@ function updateChart() {
     barAxis: chartConfig.value.yAxis,
     lineAxis: chartConfig.value.lineAxis || chartConfig.value.yAxis,
     title: chartConfig.value.title,
-    aggregation: chartConfig.value.aggregation
+    aggregation: chartConfig.value.aggregation,
+    groupBy: chartConfig.value.groupBy,
+    stackMode: chartConfig.value.stackMode
   }
 
   const options = generateChartOptions(chartConfig.value.type, config, filteredData.value)
