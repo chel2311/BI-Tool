@@ -177,6 +177,9 @@
           <button @click="exportPNG" class="btn-primary w-full text-sm">
             PNG画像として保存
           </button>
+          <button @click="handleExportPPT" class="btn-accent w-full text-sm">
+            PowerPointに出力
+          </button>
           <button @click="handleExportExcel" class="btn-secondary w-full text-sm">
             集計データをExcel出力
           </button>
@@ -234,7 +237,7 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useDataStore } from '@/stores/dataStore'
 import { generateChartOptions } from '@/services/chartGenerator'
-import { exportToExcel, exportToCSV, exportAggregatedToExcel } from '@/services/exportService'
+import { exportToExcel, exportToCSV, exportAggregatedToExcel, exportChartToPowerPoint } from '@/services/exportService'
 import * as echarts from 'echarts'
 
 const dataStore = useDataStore()
@@ -364,6 +367,15 @@ function handleExportExcel() {
 function handleExportCSV() {
   if (!activeDataset.value) return
   exportToCSV(filteredData.value, columns.value, `data_${Date.now()}`)
+}
+
+// PowerPoint出力
+function handleExportPPT() {
+  if (!chartConfig.value.xAxis || !chartConfig.value.yAxis) {
+    alert('チャート設定を完了してください')
+    return
+  }
+  exportChartToPowerPoint(chartInstance, chartConfig.value, filteredData.value, `chart_${Date.now()}`)
 }
 
 // リサイズ対応

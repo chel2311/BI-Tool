@@ -4,6 +4,7 @@
  */
 
 import * as XLSX from 'xlsx'
+import pptxgen from 'pptxgenjs'
 
 /**
  * データをExcelファイルとしてエクスポート
@@ -184,4 +185,200 @@ function getAggLabel(agg) {
     distinct: 'ユニーク数'
   }
   return labels[agg] || agg
+}
+
+/**
+ * チャートをPowerPointにエクスポート
+ * @param {Object} chartConfig - チャート設定
+ * @param {Array} data - フィルタ済みデータ
+ * @param {string} chartImageBase64 - チャート画像（base64）
+ * @param {string} filename - ファイル名
+ */
+export function exportToPowerPoint(chartConfig, data, chartImageBase64, filename = 'chart') {
+  const pptx = new pptxgen()
+
+  // プレゼンテーション設定
+  pptx.author = 'Browser BI Tool'
+  pptx.title = chartConfig.title || 'チャート'
+  pptx.subject = 'データ分析レポート'
+  pptx.company = ''
+
+  // コーポレートカラー
+  const primaryColor = '005BAB'
+  const accentColor = 'FF961C'
+
+  // タイトルスライド
+  const titleSlide = pptx.addSlide()
+  titleSlide.addText(chartConfig.title || 'データ分析レポート', {
+    x: 0.5,
+    y: 2,
+    w: '90%',
+    h: 1.5,
+    fontSize: 36,
+    fontFace: 'Meiryo',
+    color: primaryColor,
+    align: 'center',
+    bold: true
+  })
+  titleSlide.addText(`${chartConfig.xAxis} × ${chartConfig.yAxis}`, {
+    x: 0.5,
+    y: 3.5,
+    w: '90%',
+    h: 0.5,
+    fontSize: 18,
+    fontFace: 'Meiryo',
+    color: '666666',
+    align: 'center'
+  })
+  titleSlide.addText(new Date().toLocaleDateString('ja-JP'), {
+    x: 0.5,
+    y: 4.5,
+    w: '90%',
+    h: 0.5,
+    fontSize: 14,
+    fontFace: 'Meiryo',
+    color: '999999',
+    align: 'center'
+  })
+
+  // チャートスライド
+  const chartSlide = pptx.addSlide()
+  chartSlide.addText(chartConfig.title || 'チャート', {
+    x: 0.5,
+    y: 0.3,
+    w: '90%',
+    h: 0.5,
+    fontSize: 24,
+    fontFace: 'Meiryo',
+    color: primaryColor,
+    bold: true
+  })
+
+  // チャート画像を追加
+  if (chartImageBase64) {
+    chartSlide.addImage({
+      data: chartImageBase64,
+      x: 0.5,
+      y: 1,
+      w: 9,
+      h: 5.5
+    })
+  }
+
+  // データテーブルスライド
+  const dataSlide = pptx.addSlide()
+  dataSlide.addText('集計データ', {
+    x: 0.5,
+    y: 0.3,
+    w: '90%',
+    h: 0.5,
+    fontSize: 24,
+    fontFace: 'Meiryo',
+    color: primaryColor,
+    bold: true
+  })
+
+  // 集計データを取得
+  const { xAxis, yAxis, aggregation = 'sum', groupBy = '' } = chartConfig
+  const categories = [...new Set(data.map(row => row[xAxis]))]
+
+  if (groupBy) {
+    // グループ化あり：ピボット形式
+    const groups = [...new Set(data.map(row => row[groupBy]))]
+    const tableRows = [[xAxis, ...groups]]
+
+    categories.slice(0, 15).forEach(cat => {
+      const rowData = [String(cat)]
+      groups.forEach(group => {
+        const filtered = data.filter(row => row[xAxis] === cat && row[groupBy] === group)
+        const value = aggregate(filtered, yAxis, aggregation)
+        rowData.push(String(value))
+      })
+      tableRows.push(rowData)
+    })
+
+    dataSlide.addTable(tableRows, {
+      x: 0.5,
+      y: 1,
+      w: 9,
+      fontFace: 'Meiryo',
+      fontSize: 10,
+      color: '333333',
+      border: { pt: 0.5, color: 'CCCCCC' },
+      fill: { color: 'FFFFFF' },
+      colW: Array(groups.length + 1).fill(9 / (groups.length + 1)),
+      rowH: 0.4,
+      autoPage: true,
+      firstRow: {
+        fill: { color: primaryColor },
+        color: 'FFFFFF',
+        bold: true
+      }
+    })
+  } else {
+    // グループ化なし：2列
+    const tableRows = [[xAxis, `${yAxis}（${getAggLabel(aggregation)}）`]]
+
+    categories.slice(0, 20).forEach(cat => {
+      const filtered = data.filter(row => row[xAxis] === cat)
+      const value = aggregate(filtered, yAxis, aggregation)
+      tableRows.push([String(cat), String(value)])
+    })
+
+    dataSlide.addTable(tableRows, {
+      x: 0.5,
+      y: 1,
+      w: 9,
+      fontFace: 'Meiryo',
+      fontSize: 12,
+      color: '333333',
+      border: { pt: 0.5, color: 'CCCCCC' },
+      fill: { color: 'FFFFFF' },
+      colW: [4.5, 4.5],
+      rowH: 0.4,
+      autoPage: true,
+      firstRow: {
+        fill: { color: primaryColor },
+        color: 'FFFFFF',
+        bold: true
+      }
+    })
+  }
+
+  // 補足情報
+  dataSlide.addText(`データ件数: ${data.length}件  |  集計方法: ${getAggLabel(aggregation)}`, {
+    x: 0.5,
+    y: 6.5,
+    w: 9,
+    h: 0.3,
+    fontSize: 10,
+    fontFace: 'Meiryo',
+    color: '999999'
+  })
+
+  // ファイルダウンロード
+  pptx.writeFile({ fileName: `${filename}.pptx` })
+}
+
+/**
+ * EChartsインスタンスからPowerPointにエクスポート
+ * @param {Object} chartInstance - EChartsインスタンス
+ * @param {Object} chartConfig - チャート設定
+ * @param {Array} data - フィルタ済みデータ
+ * @param {string} filename - ファイル名
+ */
+export function exportChartToPowerPoint(chartInstance, chartConfig, data, filename = 'chart') {
+  if (!chartInstance) {
+    alert('チャートが表示されていません')
+    return
+  }
+
+  // チャート画像を取得
+  const chartImageBase64 = chartInstance.getDataURL({
+    type: 'png',
+    pixelRatio: 2,
+    backgroundColor: '#fff'
+  })
+
+  exportToPowerPoint(chartConfig, data, chartImageBase64, filename)
 }
