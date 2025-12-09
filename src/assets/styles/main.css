@@ -1,0 +1,75 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* カスタムスタイル */
+:root {
+  --color-primary: #005BAB;
+  --color-accent: #FF961C;
+}
+
+body {
+  font-family: 'Meiryo', 'メイリオ', 'Hiragino Sans', sans-serif;
+  background-color: #f8fafc;
+  min-height: 100vh;
+}
+
+/* ドラッグ&ドロップエリア */
+.drop-zone {
+  @apply border-2 border-dashed border-gray-300 rounded-lg p-8 text-center transition-colors duration-200;
+}
+
+.drop-zone.drag-over {
+  @apply border-primary-500 bg-primary-50;
+}
+
+/* チャートコンテナ */
+.chart-container {
+  @apply bg-white rounded-lg shadow-md p-4;
+  min-height: 400px;
+}
+
+/* フィルターパネル */
+.filter-panel {
+  @apply bg-white rounded-lg shadow-md p-4 space-y-4;
+}
+
+/* ボタンスタイル */
+.btn-primary {
+  @apply bg-primary-500 text-white px-4 py-2 rounded-md hover:bg-primary-600 transition-colors duration-200;
+}
+
+.btn-secondary {
+  @apply bg-gray-200 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-300 transition-colors duration-200;
+}
+
+.btn-accent {
+  @apply bg-accent-500 text-white px-4 py-2 rounded-md hover:bg-accent-600 transition-colors duration-200;
+}
+
+/* データテーブル */
+.data-table {
+  @apply w-full border-collapse;
+}
+
+.data-table th {
+  @apply bg-gray-100 border border-gray-200 px-3 py-2 text-left text-sm font-medium text-gray-700;
+}
+
+.data-table td {
+  @apply border border-gray-200 px-3 py-2 text-sm text-gray-600;
+}
+
+.data-table tr:hover td {
+  @apply bg-gray-50;
+}
+
+/* セレクトボックス */
+.select-box {
+  @apply block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500;
+}
+
+/* ローディングスピナー */
+.spinner {
+  @apply animate-spin h-8 w-8 border-4 border-primary-500 border-t-transparent rounded-full;
+}
