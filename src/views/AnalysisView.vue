@@ -52,7 +52,20 @@
             </label>
             <select v-model="chartConfig.yAxis" class="select-box">
               <option value="">選択してください</option>
-              <option v-for="col in numericColumns" :key="col" :value="col">{{ col }}</option>
+              <option v-for="col in columns" :key="col" :value="col">{{ col }}</option>
+            </select>
+          </div>
+
+          <!-- 集計方法 -->
+          <div v-if="chartConfig.type !== 'scatter'">
+            <label class="block text-sm font-medium text-gray-700 mb-1">集計方法</label>
+            <select v-model="chartConfig.aggregation" class="select-box">
+              <option value="sum">合計</option>
+              <option value="count">カウント</option>
+              <option value="avg">平均</option>
+              <option value="max">最大</option>
+              <option value="min">最小</option>
+              <option value="distinct">ユニーク数</option>
             </select>
           </div>
 
@@ -61,7 +74,7 @@
             <label class="block text-sm font-medium text-gray-700 mb-1">折れ線（Y軸2）</label>
             <select v-model="chartConfig.lineAxis" class="select-box">
               <option value="">選択してください</option>
-              <option v-for="col in numericColumns" :key="col" :value="col">{{ col }}</option>
+              <option v-for="col in columns" :key="col" :value="col">{{ col }}</option>
             </select>
           </div>
 
@@ -72,7 +85,7 @@
               v-model="chartConfig.title"
               type="text"
               class="select-box"
-              placeholder="チャートタイトル"
+              placeholder="チャートタイトル（自動生成）"
             />
           </div>
         </div>
@@ -182,7 +195,8 @@ const chartConfig = ref({
   xAxis: '',
   yAxis: '',
   lineAxis: '',
-  title: ''
+  title: '',
+  aggregation: 'sum'
 })
 
 // フィルター
@@ -191,12 +205,6 @@ const filters = ref([])
 // データ取得
 const activeDataset = computed(() => dataStore.activeDataset)
 const columns = computed(() => activeDataset.value?.columns || [])
-
-// 数値カラムのみ
-const numericColumns = computed(() => {
-  if (!activeDataset.value) return []
-  return columns.value.filter(col => activeDataset.value.types[col] === 'number')
-})
 
 // フィルター適用後データ
 const filteredData = computed(() => {
@@ -261,7 +269,8 @@ function updateChart() {
     value: chartConfig.value.yAxis,
     barAxis: chartConfig.value.yAxis,
     lineAxis: chartConfig.value.lineAxis || chartConfig.value.yAxis,
-    title: chartConfig.value.title
+    title: chartConfig.value.title,
+    aggregation: chartConfig.value.aggregation
   }
 
   const options = generateChartOptions(chartConfig.value.type, config, filteredData.value)
@@ -297,8 +306,8 @@ onMounted(() => {
   if (activeDataset.value && columns.value.length > 0) {
     // デフォルト設定
     chartConfig.value.xAxis = columns.value[0]
-    if (numericColumns.value.length > 0) {
-      chartConfig.value.yAxis = numericColumns.value[0]
+    if (columns.value.length > 1) {
+      chartConfig.value.yAxis = columns.value[1]
     }
   }
 })

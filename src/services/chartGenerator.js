@@ -9,10 +9,59 @@ const colorPalette = [
 ]
 
 /**
+ * 集計関数
+ * @param {Array} rows - 集計対象の行
+ * @param {string} column - 集計対象のカラム
+ * @param {string} aggregation - 集計方法 ('sum', 'count', 'avg', 'max', 'min')
+ * @returns {number} - 集計結果
+ */
+export function aggregate(rows, column, aggregation = 'sum') {
+  if (rows.length === 0) return 0
+
+  switch (aggregation) {
+    case 'count':
+      return rows.length
+
+    case 'sum':
+      return rows.reduce((sum, row) => sum + (Number(row[column]) || 0), 0)
+
+    case 'avg':
+      const sum = rows.reduce((s, row) => s + (Number(row[column]) || 0), 0)
+      return rows.length > 0 ? sum / rows.length : 0
+
+    case 'max':
+      const maxValues = rows.map(row => Number(row[column]) || 0)
+      return Math.max(...maxValues)
+
+    case 'min':
+      const minValues = rows.map(row => Number(row[column]) || 0)
+      return Math.min(...minValues)
+
+    case 'distinct':
+      return new Set(rows.map(row => row[column])).size
+
+    default:
+      return rows.reduce((sum, row) => sum + (Number(row[column]) || 0), 0)
+  }
+}
+
+/**
+ * 集計方法の日本語ラベル
+ */
+export const aggregationLabels = {
+  sum: '合計',
+  count: 'カウント',
+  avg: '平均',
+  max: '最大',
+  min: '最小',
+  distinct: 'ユニーク数'
+}
+
+/**
  * 棒グラフオプション生成
  */
 export function generateBarOptions(config, data) {
-  const { xAxis, yAxis, title, horizontal = false } = config
+  const { xAxis, yAxis, title, horizontal = false, aggregation = 'sum' } = config
 
   // X軸のユニーク値を取得
   const categories = [...new Set(data.map(row => row[xAxis]))]
@@ -20,17 +69,28 @@ export function generateBarOptions(config, data) {
   // Y軸の値を集計
   const values = categories.map(cat => {
     const rows = data.filter(row => row[xAxis] === cat)
-    return rows.reduce((sum, row) => sum + (Number(row[yAxis]) || 0), 0)
+    return aggregate(rows, yAxis, aggregation)
   })
+
+  // タイトル生成
+  const aggLabel = aggregationLabels[aggregation] || aggregation
+  const chartTitle = title || `${yAxis}の${aggLabel} (${xAxis}別)`
 
   const option = {
     title: {
-      text: title || `${yAxis} by ${xAxis}`,
+      text: chartTitle,
       left: 'center'
     },
     tooltip: {
       trigger: 'axis',
-      axisPointer: { type: 'shadow' }
+      axisPointer: { type: 'shadow' },
+      formatter: (params) => {
+        const p = params[0]
+        const formattedValue = typeof p.value === 'number'
+          ? p.value.toLocaleString('ja-JP', { maximumFractionDigits: 2 })
+          : p.value
+        return `${p.name}<br/>${aggLabel}: ${formattedValue}`
+      }
     },
     grid: {
       left: '3%',
@@ -63,21 +123,31 @@ export function generateBarOptions(config, data) {
  * 折れ線グラフオプション生成
  */
 export function generateLineOptions(config, data) {
-  const { xAxis, yAxis, title, smooth = true } = config
+  const { xAxis, yAxis, title, smooth = true, aggregation = 'sum' } = config
 
   const categories = [...new Set(data.map(row => row[xAxis]))]
   const values = categories.map(cat => {
     const rows = data.filter(row => row[xAxis] === cat)
-    return rows.reduce((sum, row) => sum + (Number(row[yAxis]) || 0), 0)
+    return aggregate(rows, yAxis, aggregation)
   })
+
+  const aggLabel = aggregationLabels[aggregation] || aggregation
+  const chartTitle = title || `${yAxis}の${aggLabel} (${xAxis}別)`
 
   return {
     title: {
-      text: title || `${yAxis} by ${xAxis}`,
+      text: chartTitle,
       left: 'center'
     },
     tooltip: {
-      trigger: 'axis'
+      trigger: 'axis',
+      formatter: (params) => {
+        const p = params[0]
+        const formattedValue = typeof p.value === 'number'
+          ? p.value.toLocaleString('ja-JP', { maximumFractionDigits: 2 })
+          : p.value
+        return `${p.name}<br/>${aggLabel}: ${formattedValue}`
+      }
     },
     grid: {
       left: '3%',
@@ -112,29 +182,34 @@ export function generateLineOptions(config, data) {
  * 円グラフオプション生成
  */
 export function generatePieOptions(config, data) {
-  const { category, value, title, donut = false } = config
+  const { category, value, title, donut = false, aggregation = 'sum' } = config
 
   // カテゴリ別に集計
-  const aggregated = {}
-  data.forEach(row => {
-    const cat = row[category]
-    const val = Number(row[value]) || 0
-    aggregated[cat] = (aggregated[cat] || 0) + val
+  const categories = [...new Set(data.map(row => row[category]))]
+  const pieData = categories.map(cat => {
+    const rows = data.filter(row => row[category] === cat)
+    return {
+      name: cat,
+      value: aggregate(rows, value, aggregation)
+    }
   })
 
-  const pieData = Object.entries(aggregated).map(([name, value]) => ({
-    name,
-    value
-  }))
+  const aggLabel = aggregationLabels[aggregation] || aggregation
+  const chartTitle = title || `${value}の${aggLabel} (${category}別)`
 
   return {
     title: {
-      text: title || `${value} by ${category}`,
+      text: chartTitle,
       left: 'center'
     },
     tooltip: {
       trigger: 'item',
-      formatter: '{b}: {c} ({d}%)'
+      formatter: (params) => {
+        const formattedValue = typeof params.value === 'number'
+          ? params.value.toLocaleString('ja-JP', { maximumFractionDigits: 2 })
+          : params.value
+        return `${params.name}<br/>${aggLabel}: ${formattedValue} (${params.percent}%)`
+      }
     },
     legend: {
       orient: 'vertical',
@@ -230,28 +305,40 @@ export function generateScatterOptions(config, data) {
  * 組合せチャートオプション生成
  */
 export function generateComboOptions(config, data) {
-  const { xAxis, barAxis, lineAxis, title } = config
+  const { xAxis, barAxis, lineAxis, title, aggregation = 'sum' } = config
 
   const categories = [...new Set(data.map(row => row[xAxis]))]
 
   const barValues = categories.map(cat => {
     const rows = data.filter(row => row[xAxis] === cat)
-    return rows.reduce((sum, row) => sum + (Number(row[barAxis]) || 0), 0)
+    return aggregate(rows, barAxis, aggregation)
   })
 
   const lineValues = categories.map(cat => {
     const rows = data.filter(row => row[xAxis] === cat)
-    return rows.reduce((sum, row) => sum + (Number(row[lineAxis]) || 0), 0)
+    return aggregate(rows, lineAxis, aggregation)
   })
+
+  const aggLabel = aggregationLabels[aggregation] || aggregation
 
   return {
     title: {
-      text: title || `${barAxis} & ${lineAxis} by ${xAxis}`,
+      text: title || `${barAxis} & ${lineAxis}の${aggLabel} (${xAxis}別)`,
       left: 'center'
     },
     tooltip: {
       trigger: 'axis',
-      axisPointer: { type: 'cross' }
+      axisPointer: { type: 'cross' },
+      formatter: (params) => {
+        let result = params[0].name + '<br/>'
+        params.forEach(p => {
+          const formattedValue = typeof p.value === 'number'
+            ? p.value.toLocaleString('ja-JP', { maximumFractionDigits: 2 })
+            : p.value
+          result += `${p.seriesName}: ${formattedValue}<br/>`
+        })
+        return result
+      }
     },
     legend: {
       data: [barAxis, lineAxis],
