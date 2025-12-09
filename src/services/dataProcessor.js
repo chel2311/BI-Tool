@@ -73,6 +73,55 @@ export function normalizeData(data, types) {
 }
 
 /**
+ * ヘッダー行を自動検出
+ * ヘッダー行の特徴:
+ * - 全てのセルが空でない文字列
+ * - 数値のみの行ではない
+ * - 次の行にデータがある
+ * @param {Array<Array>} rawData - 2次元配列データ
+ * @param {number} maxSearch - 検索する最大行数（デフォルト: 20）
+ * @returns {number} - ヘッダー行のインデックス（0始まり）
+ */
+export function detectHeaderRow(rawData, maxSearch = 20) {
+  const searchLimit = Math.min(rawData.length - 1, maxSearch)
+
+  for (let i = 0; i < searchLimit; i++) {
+    const row = rawData[i]
+    if (!row || row.length === 0) continue
+
+    // 行の特性を分析
+    const nonEmptyCells = row.filter(cell => cell !== null && cell !== undefined && cell !== '')
+    if (nonEmptyCells.length === 0) continue
+
+    // 全てが数値の行はヘッダーではない
+    const numericCount = nonEmptyCells.filter(cell => {
+      if (typeof cell === 'number') return true
+      const str = String(cell).trim()
+      return !isNaN(parseFloat(str.replace(/,/g, ''))) && str !== ''
+    }).length
+
+    // 80%以上が数値ならスキップ（データ行の可能性が高い）
+    if (numericCount / nonEmptyCells.length > 0.8) continue
+
+    // 文字列が多い行で、次の行が存在する場合はヘッダー候補
+    const stringCount = nonEmptyCells.filter(cell =>
+      typeof cell === 'string' && cell.trim() !== ''
+    ).length
+
+    // 50%以上が文字列で、空でないセルが3つ以上あればヘッダーとして採用
+    if (stringCount / nonEmptyCells.length >= 0.5 && nonEmptyCells.length >= 2) {
+      // 次の行にデータがあるか確認
+      if (i + 1 < rawData.length && rawData[i + 1] && rawData[i + 1].length > 0) {
+        return i
+      }
+    }
+  }
+
+  // 見つからない場合は0行目をヘッダーとする
+  return 0
+}
+
+/**
  * CSVテキストをパース
  * @param {string} text - CSVテキスト
  * @returns {Object} - {columns, data, types}
@@ -151,12 +200,47 @@ export async function parseCSV(file) {
 }
 
 /**
+ * Excelファイルのシート一覧とプレビュー情報を取得
+ * @param {File} file - アップロードされたファイル
+ * @returns {Promise<{sheets: Array<{name, rowCount, colCount, headerRow}>}>}
+ */
+export async function getExcelSheetInfo(file) {
+  const buffer = await file.arrayBuffer()
+  const workbook = XLSX.read(buffer, { type: 'array', cellDates: true })
+
+  const sheets = workbook.SheetNames.map(sheetName => {
+    const worksheet = workbook.Sheets[sheetName]
+    const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' })
+
+    // ヘッダー行を検出
+    const headerRow = detectHeaderRow(rawData)
+
+    // プレビュー用の先頭5行を取得
+    const previewRows = rawData.slice(0, Math.min(10, rawData.length))
+
+    return {
+      name: sheetName,
+      rowCount: rawData.length,
+      colCount: rawData[0]?.length || 0,
+      headerRow: headerRow,
+      preview: previewRows
+    }
+  })
+
+  return { sheets, fileName: file.name }
+}
+
+/**
  * Excelファイルを解析
  * @param {File} file - アップロードされたファイル
- * @param {string} sheetName - シート名（省略時は最初のシート）
+ * @param {Object} options - オプション
+ * @param {string} options.sheetName - シート名（省略時は最初のシート）
+ * @param {number} options.headerRow - ヘッダー行（0始まり、省略時は自動検出）
  * @returns {Promise<{columns, data, types, sheets, name}>}
  */
-export async function parseExcel(file, sheetName = null) {
+export async function parseExcel(file, options = {}) {
+  const { sheetName = null, headerRow = null } = options
+
   const buffer = await file.arrayBuffer()
   const workbook = XLSX.read(buffer, { type: 'array', cellDates: true })
 
@@ -173,21 +257,47 @@ export async function parseExcel(file, sheetName = null) {
 
   if (rawData.length === 0) throw new Error('空のシートです')
 
-  // ヘッダー行
-  const columns = rawData[0].map((col, i) => col || `Column${i + 1}`)
+  // ヘッダー行を決定（指定がなければ自動検出）
+  const actualHeaderRow = headerRow !== null ? headerRow : detectHeaderRow(rawData)
 
-  // データ行
-  const data = rawData.slice(1).map(row => {
-    const obj = {}
-    columns.forEach((col, i) => {
-      obj[col] = row[i] ?? ''
-    })
-    return obj
+  // ヘッダー行のデータ
+  const headerRowData = rawData[actualHeaderRow] || []
+  const columns = headerRowData.map((col, i) => {
+    const colName = col !== null && col !== undefined && col !== ''
+      ? String(col).trim()
+      : `Column${i + 1}`
+    return colName
   })
+
+  // 重複するカラム名を処理
+  const columnCounts = {}
+  const uniqueColumns = columns.map(col => {
+    if (columnCounts[col] === undefined) {
+      columnCounts[col] = 0
+      return col
+    } else {
+      columnCounts[col]++
+      return `${col}_${columnCounts[col]}`
+    }
+  })
+
+  // データ行（ヘッダー行より後のデータ）
+  const data = rawData.slice(actualHeaderRow + 1)
+    .filter(row => {
+      // 完全に空の行を除外
+      return row.some(cell => cell !== null && cell !== undefined && cell !== '')
+    })
+    .map(row => {
+      const obj = {}
+      uniqueColumns.forEach((col, i) => {
+        obj[col] = row[i] ?? ''
+      })
+      return obj
+    })
 
   // 型検出
   const types = {}
-  columns.forEach(col => {
+  uniqueColumns.forEach(col => {
     const colData = data.map(row => row[col])
     types[col] = detectDataType(colData)
   })
@@ -196,11 +306,12 @@ export async function parseExcel(file, sheetName = null) {
   const normalizedData = normalizeData(data, types)
 
   return {
-    columns,
+    columns: uniqueColumns,
     data: normalizedData,
     types,
     sheets,
     currentSheet: targetSheet,
+    headerRow: actualHeaderRow,
     name: file.name,
     rowCount: normalizedData.length
   }
@@ -245,9 +356,10 @@ export async function parseJSON(file) {
 /**
  * ファイルを自動判定して解析
  * @param {File} file - アップロードされたファイル
+ * @param {Object} options - オプション（Excelの場合に使用）
  * @returns {Promise<Object>}
  */
-export async function parseFile(file) {
+export async function parseFile(file, options = {}) {
   const ext = file.name.split('.').pop().toLowerCase()
 
   switch (ext) {
@@ -255,10 +367,20 @@ export async function parseFile(file) {
       return parseCSV(file)
     case 'xlsx':
     case 'xls':
-      return parseExcel(file)
+      return parseExcel(file, options)
     case 'json':
       return parseJSON(file)
     default:
       throw new Error(`対応していないファイル形式です: ${ext}`)
   }
+}
+
+/**
+ * Excelファイルかどうか判定
+ * @param {File} file
+ * @returns {boolean}
+ */
+export function isExcelFile(file) {
+  const ext = file.name.split('.').pop().toLowerCase()
+  return ext === 'xlsx' || ext === 'xls'
 }

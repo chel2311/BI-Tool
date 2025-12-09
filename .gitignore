@@ -34,3 +34,5 @@ tmp_*
 # Cache
 .cache/
 *.cache
+*.xlsx
+*:Zone.Identifier
