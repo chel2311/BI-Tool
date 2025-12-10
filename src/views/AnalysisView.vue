@@ -103,12 +103,24 @@
           </div>
 
           <!-- 組合せチャート用 -->
-          <div v-if="chartConfig.type === 'combo'">
-            <label class="block text-sm font-medium text-gray-700 mb-1">折れ線（Y軸2）</label>
-            <select v-model="chartConfig.lineAxis" class="select-box">
-              <option value="">選択してください</option>
-              <option v-for="col in columns" :key="col" :value="col">{{ col }}</option>
-            </select>
+          <div v-if="chartConfig.type === 'combo'" class="space-y-3 p-3 bg-gray-50 rounded-lg">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">折れ線（Y軸2）</label>
+              <select v-model="chartConfig.lineAxis" class="select-box">
+                <option value="">選択してください</option>
+                <option v-for="col in columns" :key="col" :value="col">{{ col }}</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">折れ線の集計方法</label>
+              <select v-model="chartConfig.lineAggregation" class="select-box">
+                <option value="sum">合計</option>
+                <option value="count">カウント</option>
+                <option value="avg">平均</option>
+                <option value="max">最大</option>
+                <option value="min">最小</option>
+              </select>
+            </div>
           </div>
 
           <!-- ソート -->
@@ -346,6 +358,7 @@ const chartConfig = ref({
   lineAxis: '',
   title: '',
   aggregation: 'sum',
+  lineAggregation: 'sum',  // 折れ線用集計方法
   groupBy: '',
   stackMode: 'none',
   sortBy: 'none',
@@ -558,6 +571,7 @@ function updateChart() {
     lineAxis: chartConfig.value.lineAxis || chartConfig.value.yAxis,
     title: chartConfig.value.title,
     aggregation: chartConfig.value.aggregation,
+    lineAggregation: chartConfig.value.lineAggregation,
     groupBy: chartConfig.value.groupBy,
     stackMode: chartConfig.value.stackMode,
     sortBy: chartConfig.value.sortBy,

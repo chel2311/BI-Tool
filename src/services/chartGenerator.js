@@ -621,7 +621,7 @@ export function generateScatterOptions(config, data) {
  * 組合せチャートオプション生成
  */
 export function generateComboOptions(config, data) {
-  const { xAxis, barAxis, lineAxis, title, aggregation = 'sum' } = config
+  const { xAxis, barAxis, lineAxis, title, aggregation = 'sum', lineAggregation = 'sum' } = config
 
   const categories = [...new Set(data.map(row => row[xAxis]))]
 
@@ -632,14 +632,15 @@ export function generateComboOptions(config, data) {
 
   const lineValues = categories.map(cat => {
     const rows = data.filter(row => row[xAxis] === cat)
-    return aggregate(rows, lineAxis, aggregation)
+    return aggregate(rows, lineAxis, lineAggregation)
   })
 
-  const aggLabel = aggregationLabels[aggregation] || aggregation
+  const barAggLabel = aggregationLabels[aggregation] || aggregation
+  const lineAggLabel = aggregationLabels[lineAggregation] || lineAggregation
 
   return {
     title: {
-      text: title || `${barAxis} & ${lineAxis}の${aggLabel} (${xAxis}別)`,
+      text: title || `${barAxis}(${barAggLabel}) & ${lineAxis}(${lineAggLabel}) (${xAxis}別)`,
       left: 'center'
     },
     tooltip: {
