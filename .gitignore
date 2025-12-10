@@ -36,3 +36,7 @@ tmp_*
 *.cache
 *.xlsx
 *:Zone.Identifier
+
+# Development files
+release/
+*.tar
