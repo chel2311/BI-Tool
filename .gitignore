@@ -38,5 +38,4 @@ tmp_*
 *:Zone.Identifier
 
 # Development files
-release/
 *.tar

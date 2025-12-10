@@ -1,7 +1,6 @@
 $port = 8080
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$distDir = Join-Path $scriptDir "dist"
-Set-Location $distDir
+Set-Location (Join-Path $scriptDir "BI-Tool")
 
 $listener = New-Object System.Net.HttpListener
 $listener.Prefixes.Add("http://localhost:$port/")
@@ -16,7 +15,7 @@ Write-Host "`n================================" -ForegroundColor Cyan
 Write-Host "  BI Tool Server Running" -ForegroundColor Cyan
 Write-Host "================================`n" -ForegroundColor Cyan
 Write-Host "URL: http://localhost:$port" -ForegroundColor Green
-Write-Host "`nPress Ctrl+C or close this window to stop`n" -ForegroundColor Yellow
+Write-Host "`nClose this window to stop`n" -ForegroundColor Yellow
 
 $mime = @{".html"="text/html; charset=utf-8";".js"="application/javascript";".css"="text/css";".svg"="image/svg+xml";".png"="image/png";".json"="application/json";".csv"="text/csv"}
 
