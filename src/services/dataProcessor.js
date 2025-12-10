@@ -74,51 +74,156 @@ export function normalizeData(data, types) {
 
 /**
  * ヘッダー行を自動検出
+ * 改善版：全列を分析してより正確にヘッダー行を検出
+ *
  * ヘッダー行の特徴:
- * - 全てのセルが空でない文字列
+ * - 各列のデータ型が均一でない行（文字列ラベルの可能性）
  * - 数値のみの行ではない
  * - 次の行にデータがある
+ * - 全列の少なくとも半分以上が埋まっている
+ *
  * @param {Array<Array>} rawData - 2次元配列データ
  * @param {number} maxSearch - 検索する最大行数（デフォルト: 20）
  * @returns {number} - ヘッダー行のインデックス（0始まり）
  */
 export function detectHeaderRow(rawData, maxSearch = 20) {
+  if (!rawData || rawData.length === 0) return 0
+
   const searchLimit = Math.min(rawData.length - 1, maxSearch)
+
+  // 列数を決定（最初の10行の最大列数）
+  const maxCols = Math.max(...rawData.slice(0, 10).map(row => row?.length || 0))
+  if (maxCols === 0) return 0
+
+  // 各列のデータ型パターンを分析（ヘッダー行以降のデータで判定）
+  function analyzeColumnTypes(startRow) {
+    const types = []
+    for (let col = 0; col < maxCols; col++) {
+      let numericCount = 0
+      let stringCount = 0
+      let emptyCount = 0
+      let totalCount = 0
+
+      for (let row = startRow; row < Math.min(rawData.length, startRow + 20); row++) {
+        const cell = rawData[row]?.[col]
+        totalCount++
+
+        if (cell === null || cell === undefined || cell === '') {
+          emptyCount++
+          continue
+        }
+
+        if (typeof cell === 'number') {
+          numericCount++
+        } else {
+          const str = String(cell).trim()
+          const num = parseFloat(str.replace(/,/g, ''))
+          if (!isNaN(num) && str !== '') {
+            numericCount++
+          } else {
+            stringCount++
+          }
+        }
+      }
+
+      types.push({
+        numeric: numericCount,
+        string: stringCount,
+        empty: emptyCount,
+        total: totalCount,
+        isNumericColumn: numericCount > stringCount && numericCount > 0
+      })
+    }
+    return types
+  }
+
+  // ヘッダー候補をスコアリング
+  function scoreAsHeader(rowIndex) {
+    const row = rawData[rowIndex]
+    if (!row || row.length === 0) return -1
+
+    let score = 0
+    const nextRowTypes = analyzeColumnTypes(rowIndex + 1)
+
+    let filledCells = 0
+    let textCells = 0
+    let numericCells = 0
+    let mismatchedTypeCells = 0  // 列の型と異なるセル
+
+    for (let col = 0; col < Math.min(row.length, maxCols); col++) {
+      const cell = row[col]
+
+      if (cell === null || cell === undefined || cell === '') {
+        continue
+      }
+
+      filledCells++
+
+      const isNumeric = typeof cell === 'number' ||
+        (!isNaN(parseFloat(String(cell).replace(/,/g, ''))) && String(cell).trim() !== '')
+
+      if (isNumeric) {
+        numericCells++
+      } else {
+        textCells++
+      }
+
+      // この列が数値列なのに、このセルが文字列ならヘッダーの可能性が高い
+      const colType = nextRowTypes[col]
+      if (colType && colType.isNumericColumn && !isNumeric) {
+        mismatchedTypeCells++
+      }
+    }
+
+    // スコア計算
+    // 1. 埋まっているセルが半分以上ある
+    if (filledCells >= maxCols * 0.3) score += 20
+
+    // 2. 全て数値の行はヘッダーではない可能性が高い
+    if (filledCells > 0 && numericCells / filledCells > 0.9) {
+      score -= 50
+    }
+
+    // 3. 文字列セルが多いほどヘッダーの可能性が高い
+    if (filledCells > 0) {
+      score += (textCells / filledCells) * 30
+    }
+
+    // 4. 列の型と異なるセルが多い（数値列なのにテキスト）
+    score += mismatchedTypeCells * 10
+
+    // 5. 次の行にデータがあるか
+    if (rowIndex + 1 < rawData.length) {
+      const nextRow = rawData[rowIndex + 1]
+      const nextRowNonEmpty = nextRow?.filter(c => c !== null && c !== undefined && c !== '').length || 0
+      if (nextRowNonEmpty > 0) {
+        score += 10
+      }
+    }
+
+    return score
+  }
+
+  // 各行をスコアリングして最良のヘッダー行を選択
+  let bestRow = 0
+  let bestScore = -Infinity
 
   for (let i = 0; i < searchLimit; i++) {
     const row = rawData[i]
-    if (!row || row.length === 0) continue
+    if (!row) continue
 
-    // 行の特性を分析
     const nonEmptyCells = row.filter(cell => cell !== null && cell !== undefined && cell !== '')
     if (nonEmptyCells.length === 0) continue
 
-    // 全てが数値の行はヘッダーではない
-    const numericCount = nonEmptyCells.filter(cell => {
-      if (typeof cell === 'number') return true
-      const str = String(cell).trim()
-      return !isNaN(parseFloat(str.replace(/,/g, ''))) && str !== ''
-    }).length
+    const score = scoreAsHeader(i)
 
-    // 80%以上が数値ならスキップ（データ行の可能性が高い）
-    if (numericCount / nonEmptyCells.length > 0.8) continue
-
-    // 文字列が多い行で、次の行が存在する場合はヘッダー候補
-    const stringCount = nonEmptyCells.filter(cell =>
-      typeof cell === 'string' && cell.trim() !== ''
-    ).length
-
-    // 50%以上が文字列で、空でないセルが3つ以上あればヘッダーとして採用
-    if (stringCount / nonEmptyCells.length >= 0.5 && nonEmptyCells.length >= 2) {
-      // 次の行にデータがあるか確認
-      if (i + 1 < rawData.length && rawData[i + 1] && rawData[i + 1].length > 0) {
-        return i
-      }
+    if (score > bestScore) {
+      bestScore = score
+      bestRow = i
     }
   }
 
-  // 見つからない場合は0行目をヘッダーとする
-  return 0
+  return bestRow
 }
 
 /**

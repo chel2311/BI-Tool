@@ -14,7 +14,10 @@
             ホーム
           </router-link>
           <router-link to="/analysis" class="hover:text-primary-200 transition-colors">
-            分析
+            チャート分析
+          </router-link>
+          <router-link to="/table-analysis" class="hover:text-primary-200 transition-colors">
+            表分析
           </router-link>
           <router-link to="/dashboard" class="hover:text-primary-200 transition-colors">
             ダッシュボード

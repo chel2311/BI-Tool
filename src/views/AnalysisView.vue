@@ -147,37 +147,119 @@
         </div>
       </div>
 
-      <!-- フィルター -->
+      <!-- 条件付きフィルター -->
       <div class="bg-white rounded-lg shadow-md p-4" v-if="activeDataset">
-        <h3 class="font-semibold text-gray-800 mb-3">フィルター</h3>
+        <h3 class="font-semibold text-gray-800 mb-3">
+          条件付きフィルター
+          <span class="text-xs text-gray-500 font-normal ml-1">（Excel風）</span>
+        </h3>
 
         <div class="space-y-3">
-          <div v-for="(filter, index) in filters" :key="index" class="border-b pb-3">
+          <div v-for="(filter, index) in filters" :key="index" class="border border-gray-200 rounded-lg p-3 bg-gray-50">
+            <!-- ヘッダー行：カラム選択 + 削除ボタン -->
             <div class="flex items-center justify-between mb-2">
-              <select v-model="filter.column" class="select-box text-sm flex-1 mr-2">
+              <select v-model="filter.column" @change="onColumnChange(filter)" class="select-box text-sm flex-1 mr-2">
                 <option value="">カラム選択</option>
                 <option v-for="col in columns" :key="col" :value="col">{{ col }}</option>
               </select>
-              <button @click="removeFilter(index)" class="text-red-500 hover:text-red-700">
+              <button @click="removeFilter(index)" class="text-red-500 hover:text-red-700 p-1">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
-            <select v-if="filter.column" v-model="filter.value" class="select-box text-sm">
-              <option value="">全て</option>
-              <option v-for="val in getUniqueValues(filter.column)" :key="val" :value="val">
-                {{ val }}
-              </option>
-            </select>
+
+            <!-- 演算子 + 値の条件設定 -->
+            <div v-if="filter.column" class="space-y-2">
+              <!-- 演算子選択 -->
+              <select v-model="filter.operator" class="select-box text-sm">
+                <optgroup label="テキスト条件">
+                  <option value="equals">と等しい</option>
+                  <option value="not_equals">と等しくない</option>
+                  <option value="contains">を含む</option>
+                  <option value="not_contains">を含まない</option>
+                  <option value="starts_with">で始まる</option>
+                  <option value="ends_with">で終わる</option>
+                </optgroup>
+                <optgroup label="数値条件">
+                  <option value="greater_than">より大きい</option>
+                  <option value="greater_or_equal">以上</option>
+                  <option value="less_than">より小さい</option>
+                  <option value="less_or_equal">以下</option>
+                  <option value="between">範囲内</option>
+                </optgroup>
+                <optgroup label="その他">
+                  <option value="is_empty">空である</option>
+                  <option value="is_not_empty">空でない</option>
+                </optgroup>
+              </select>
+
+              <!-- 値入力（演算子に応じて表示変更） -->
+              <div v-if="!['is_empty', 'is_not_empty'].includes(filter.operator)">
+                <!-- 範囲入力（between用） -->
+                <div v-if="filter.operator === 'between'" class="flex items-center space-x-2">
+                  <input
+                    v-model="filter.value"
+                    type="text"
+                    class="select-box text-sm flex-1"
+                    placeholder="最小値"
+                  />
+                  <span class="text-gray-500 text-sm">〜</span>
+                  <input
+                    v-model="filter.value2"
+                    type="text"
+                    class="select-box text-sm flex-1"
+                    placeholder="最大値"
+                  />
+                </div>
+                <!-- 通常入力 -->
+                <div v-else class="flex items-center space-x-2">
+                  <input
+                    v-model="filter.value"
+                    type="text"
+                    class="select-box text-sm flex-1"
+                    :placeholder="getOperatorPlaceholder(filter.operator)"
+                  />
+                  <!-- よく使う値のクイック選択 -->
+                  <div class="relative" v-if="getUniqueValues(filter.column).length > 0">
+                    <select
+                      @change="e => { filter.value = e.target.value; e.target.value = '' }"
+                      class="select-box text-sm w-24"
+                      title="候補から選択"
+                    >
+                      <option value="">候補</option>
+                      <option v-for="val in getUniqueValues(filter.column).slice(0, 20)" :key="val" :value="val">
+                        {{ truncateValue(val, 15) }}
+                      </option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 条件プレビュー -->
+              <div class="text-xs text-gray-500 mt-1 bg-white px-2 py-1 rounded border">
+                <span class="font-medium text-primary-600">{{ filter.column }}</span>
+                <span class="mx-1">{{ getOperatorLabel(filter.operator) }}</span>
+                <span v-if="!['is_empty', 'is_not_empty'].includes(filter.operator)" class="text-accent-600">
+                  「{{ filter.value || '...' }}{{ filter.operator === 'between' ? ` 〜 ${filter.value2 || '...'}` : '' }}」
+                </span>
+              </div>
+            </div>
           </div>
 
+          <!-- フィルター追加ボタン -->
           <button @click="addFilter" class="text-sm text-primary-500 hover:text-primary-700 flex items-center">
             <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
             </svg>
-            フィルター追加
+            条件を追加
           </button>
+
+          <!-- フィルター適用状況 -->
+          <div v-if="activeFiltersCount > 0" class="text-xs text-gray-500 border-t pt-2 mt-2">
+            <span class="text-primary-600 font-medium">{{ activeFiltersCount }}件</span>の条件で
+            <span class="text-accent-600 font-medium">{{ filteredData.length }}</span> / {{ activeDataset.rowCount }}行 に絞り込み
+          </div>
         </div>
       </div>
 
@@ -248,7 +330,8 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useDataStore } from '@/stores/dataStore'
 import { generateChartOptions, dateUnitLabels, applyDateUnitConversion } from '@/services/chartGenerator'
-import { exportToExcel, exportToCSV, exportAggregatedToExcel, exportChartToPowerPoint } from '@/services/exportService'
+import { exportToExcel, exportToCSV, exportAggregatedToExcel, exportChartToPowerPoint, exportToExcelWithChart, exportToPowerPointNative } from '@/services/exportService'
+import { exportToExcelWithNativeChart } from '@/services/excelChartService'
 import * as echarts from 'echarts'
 
 const dataStore = useDataStore()
@@ -277,15 +360,79 @@ const filters = ref([])
 const activeDataset = computed(() => dataStore.activeDataset)
 const columns = computed(() => activeDataset.value?.columns || [])
 
+// アクティブなフィルター数
+const activeFiltersCount = computed(() => {
+  return filters.value.filter(f => f.column && (
+    ['is_empty', 'is_not_empty'].includes(f.operator) ||
+    (f.operator === 'between' ? f.value || f.value2 : f.value)
+  )).length
+})
+
+// フィルター条件を評価する関数
+function evaluateFilter(value, filter) {
+  const strValue = String(value ?? '')
+  const numValue = parseFloat(value)
+  const filterValue = filter.value ?? ''
+  const filterValue2 = filter.value2 ?? ''
+  const filterNum = parseFloat(filterValue)
+  const filterNum2 = parseFloat(filterValue2)
+
+  switch (filter.operator) {
+    // テキスト条件
+    case 'equals':
+      return strValue === filterValue
+    case 'not_equals':
+      return strValue !== filterValue
+    case 'contains':
+      return strValue.toLowerCase().includes(filterValue.toLowerCase())
+    case 'not_contains':
+      return !strValue.toLowerCase().includes(filterValue.toLowerCase())
+    case 'starts_with':
+      return strValue.toLowerCase().startsWith(filterValue.toLowerCase())
+    case 'ends_with':
+      return strValue.toLowerCase().endsWith(filterValue.toLowerCase())
+
+    // 数値条件
+    case 'greater_than':
+      return !isNaN(numValue) && !isNaN(filterNum) && numValue > filterNum
+    case 'greater_or_equal':
+      return !isNaN(numValue) && !isNaN(filterNum) && numValue >= filterNum
+    case 'less_than':
+      return !isNaN(numValue) && !isNaN(filterNum) && numValue < filterNum
+    case 'less_or_equal':
+      return !isNaN(numValue) && !isNaN(filterNum) && numValue <= filterNum
+    case 'between':
+      return !isNaN(numValue) && !isNaN(filterNum) && !isNaN(filterNum2) &&
+             numValue >= filterNum && numValue <= filterNum2
+
+    // その他
+    case 'is_empty':
+      return value === null || value === undefined || strValue.trim() === ''
+    case 'is_not_empty':
+      return value !== null && value !== undefined && strValue.trim() !== ''
+
+    default:
+      return true
+  }
+}
+
 // フィルター適用後データ
 const filteredData = computed(() => {
   if (!activeDataset.value) return []
   let data = [...activeDataset.value.data]
 
   filters.value.forEach(filter => {
-    if (filter.column && filter.value) {
-      data = data.filter(row => String(row[filter.column]) === String(filter.value))
-    }
+    if (!filter.column) return
+
+    // 演算子に応じた条件チェック
+    const needsValue = !['is_empty', 'is_not_empty'].includes(filter.operator)
+    const hasValue = filter.operator === 'between'
+      ? (filter.value || filter.value2)
+      : filter.value
+
+    if (needsValue && !hasValue) return
+
+    data = data.filter(row => evaluateFilter(row[filter.column], filter))
   })
 
   return data
@@ -318,11 +465,65 @@ function getUniqueValues(column) {
 
 // フィルター操作
 function addFilter() {
-  filters.value.push({ column: '', value: '' })
+  filters.value.push({
+    column: '',
+    operator: 'contains',  // デフォルトは「を含む」
+    value: '',
+    value2: ''  // between用
+  })
 }
 
 function removeFilter(index) {
   filters.value.splice(index, 1)
+}
+
+// カラム変更時のリセット
+function onColumnChange(filter) {
+  filter.value = ''
+  filter.value2 = ''
+}
+
+// 演算子のラベル取得
+function getOperatorLabel(operator) {
+  const labels = {
+    equals: 'が',
+    not_equals: 'が',
+    contains: 'が',
+    not_contains: 'が',
+    starts_with: 'が',
+    ends_with: 'が',
+    greater_than: 'が',
+    greater_or_equal: 'が',
+    less_than: 'が',
+    less_or_equal: 'が',
+    between: 'が',
+    is_empty: 'が空である',
+    is_not_empty: 'が空でない'
+  }
+  return labels[operator] || 'が'
+}
+
+// 演算子のプレースホルダー取得
+function getOperatorPlaceholder(operator) {
+  const placeholders = {
+    equals: '完全一致する値を入力',
+    not_equals: '除外する値を入力',
+    contains: '含む文字列を入力',
+    not_contains: '含まない文字列を入力',
+    starts_with: '先頭の文字列を入力',
+    ends_with: '末尾の文字列を入力',
+    greater_than: '基準値を入力',
+    greater_or_equal: '基準値を入力',
+    less_than: '基準値を入力',
+    less_or_equal: '基準値を入力'
+  }
+  return placeholders[operator] || '値を入力'
+}
+
+// 値の切り詰め表示
+function truncateValue(value, maxLen) {
+  const str = String(value)
+  return str.length > maxLen ? str.substring(0, maxLen) + '...' : str
 }
 
 // 値フォーマット
@@ -381,13 +582,20 @@ function exportPNG() {
   link.click()
 }
 
-// Excel出力（集計データ）
-function handleExportExcel() {
+// Excel出力（Excelネイティブチャート付き）
+async function handleExportExcel() {
   if (!chartConfig.value.xAxis || !chartConfig.value.yAxis) {
     alert('チャート設定を完了してください')
     return
   }
-  exportAggregatedToExcel(chartConfig.value, filteredData.value, `aggregated_${Date.now()}`)
+
+  // Excelネイティブチャートを生成
+  await exportToExcelWithNativeChart(
+    chartConfig.value,
+    chartData.value,  // 日付変換済みデータを使用
+    chartConfig.value.type,
+    `chart_export_${Date.now()}`
+  )
 }
 
 // CSV出力（フィルタ済みデータ）
@@ -396,13 +604,19 @@ function handleExportCSV() {
   exportToCSV(filteredData.value, columns.value, `data_${Date.now()}`)
 }
 
-// PowerPoint出力
+// PowerPoint出力（ネイティブチャート - 編集可能）
 function handleExportPPT() {
   if (!chartConfig.value.xAxis || !chartConfig.value.yAxis) {
     alert('チャート設定を完了してください')
     return
   }
-  exportChartToPowerPoint(chartInstance, chartConfig.value, filteredData.value, `chart_${Date.now()}`)
+  // ネイティブチャート版を使用（PowerPoint内で編集可能）
+  exportToPowerPointNative(
+    chartConfig.value,
+    filteredData.value,
+    chartConfig.value.type,
+    `chart_${Date.now()}`
+  )
 }
 
 // リサイズ対応
@@ -410,9 +624,23 @@ function handleResize() {
   chartInstance?.resize()
 }
 
-// ウォッチ
+// デバウンス用タイマー
+let chartUpdateTimeout = null
+
+// デバウンス付きチャート更新
+function scheduleChartUpdate() {
+  if (chartUpdateTimeout) {
+    clearTimeout(chartUpdateTimeout)
+  }
+  chartUpdateTimeout = setTimeout(() => {
+    nextTick(updateChart)
+    chartUpdateTimeout = null
+  }, 100) // 100msのデバウンス
+}
+
+// ウォッチ（デバウンス付き）
 watch([chartConfig, chartData], () => {
-  nextTick(updateChart)
+  scheduleChartUpdate()
 }, { deep: true })
 
 onMounted(() => {
@@ -428,6 +656,9 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
+  if (chartUpdateTimeout) {
+    clearTimeout(chartUpdateTimeout)
+  }
   chartInstance?.dispose()
 })
 </script>

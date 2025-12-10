@@ -12,6 +12,11 @@ const routes = [
     component: () => import('@/views/AnalysisView.vue')
   },
   {
+    path: '/table-analysis',
+    name: 'TableAnalysis',
+    component: () => import('@/views/TableAnalysisView.vue')
+  },
+  {
     path: '/dashboard',
     name: 'Dashboard',
     component: () => import('@/views/DashboardView.vue')

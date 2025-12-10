@@ -10,11 +10,14 @@
   },
   "dependencies": {
     "echarts": "^5.5.0",
+    "exceljs": "^4.4.0",
+    "jszip": "^3.10.1",
     "pinia": "^2.1.7",
     "pptxgenjs": "^3.12.0",
     "vue": "^3.4.21",
     "vue-router": "^4.3.0",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "xlsx-chart": "^0.4.3"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.0.4",

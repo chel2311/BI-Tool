@@ -12,6 +12,23 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    assetsDir: 'assets'
+    assetsDir: 'assets',
+    chunkSizeWarningLimit: 600,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // ベンダーチャンクを分割
+          'vendor-vue': ['vue', 'vue-router', 'pinia'],
+          'vendor-echarts': ['echarts'],
+          'vendor-xlsx': ['xlsx', 'exceljs'],
+          'vendor-pptx': ['pptxgenjs'],
+          'vendor-jszip': ['jszip']
+        }
+      }
+    }
+  },
+  // 開発サーバー最適化
+  optimizeDeps: {
+    include: ['vue', 'vue-router', 'pinia', 'echarts']
   }
 })

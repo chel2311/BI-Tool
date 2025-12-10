@@ -262,15 +262,18 @@ export function generateBarOptions(config, data) {
         containLabel: true
       },
       color: colorPalette,
-      toolbox: {
-        feature: {
-          saveAsImage: { title: '画像保存' }
-        }
-      },
       xAxis: horizontal ? { type: 'value' } : { type: 'category', data: categories },
       yAxis: horizontal
         ? { type: 'category', data: categories }
-        : { type: 'value', axisLabel: stackMode === 'percent' ? { formatter: '{value}%' } : undefined },
+        : {
+            type: 'value',
+            minInterval: (aggregation === 'count' || aggregation === 'distinct') ? 1 : undefined,
+            axisLabel: stackMode === 'percent'
+              ? { formatter: '{value}%' }
+              : (aggregation === 'count' || aggregation === 'distinct')
+                ? { formatter: (value) => Math.floor(value) }
+                : undefined
+          },
       series
     }
 
@@ -313,13 +316,12 @@ export function generateBarOptions(config, data) {
       containLabel: true
     },
     color: colorPalette,
-    toolbox: {
+    toolbox: enableZoom ? {
       feature: {
-        saveAsImage: { title: '画像保存' },
-        dataZoom: enableZoom ? { title: { zoom: 'ズーム', back: 'リセット' } } : undefined,
+        dataZoom: { title: { zoom: 'ズーム', back: 'リセット' } },
         restore: { title: 'リセット' }
       }
-    }
+    } : undefined
   }
 
   // ズーム機能
@@ -330,13 +332,22 @@ export function generateBarOptions(config, data) {
     ]
   }
 
+  // Y軸設定（カウント・ユニーク数の場合は整数目盛り）
+  const yAxisConfig = {
+    type: 'value',
+    minInterval: (aggregation === 'count' || aggregation === 'distinct') ? 1 : undefined,
+    axisLabel: (aggregation === 'count' || aggregation === 'distinct')
+      ? { formatter: (value) => Math.floor(value) }
+      : undefined
+  }
+
   if (horizontal) {
     option.xAxis = { type: 'value' }
     option.yAxis = { type: 'category', data: categories }
     option.series = [{ type: 'bar', data: values }]
   } else {
     option.xAxis = { type: 'category', data: categories }
-    option.yAxis = { type: 'value' }
+    option.yAxis = yAxisConfig
     option.series = [{ type: 'bar', data: values }]
   }
 
@@ -405,18 +416,17 @@ export function generateLineOptions(config, data) {
         containLabel: true
       },
       color: colorPalette,
-      toolbox: {
-        feature: {
-          saveAsImage: { title: '画像保存' }
-        }
-      },
       xAxis: {
         type: 'category',
         data: categories,
         boundaryGap: false
       },
       yAxis: {
-        type: 'value'
+        type: 'value',
+        minInterval: (aggregation === 'count' || aggregation === 'distinct') ? 1 : undefined,
+        axisLabel: (aggregation === 'count' || aggregation === 'distinct')
+          ? { formatter: (value) => Math.floor(value) }
+          : undefined
       },
       series
     }
@@ -457,20 +467,23 @@ export function generateLineOptions(config, data) {
       containLabel: true
     },
     color: colorPalette,
-    toolbox: {
+    toolbox: enableZoom ? {
       feature: {
-        saveAsImage: { title: '画像保存' },
-        dataZoom: enableZoom ? { title: { zoom: 'ズーム', back: 'リセット' } } : undefined,
+        dataZoom: { title: { zoom: 'ズーム', back: 'リセット' } },
         restore: { title: 'リセット' }
       }
-    },
+    } : undefined,
     xAxis: {
       type: 'category',
       data: categories,
       boundaryGap: false
     },
     yAxis: {
-      type: 'value'
+      type: 'value',
+      minInterval: (aggregation === 'count' || aggregation === 'distinct') ? 1 : undefined,
+      axisLabel: (aggregation === 'count' || aggregation === 'distinct')
+        ? { formatter: (value) => Math.floor(value) }
+        : undefined
     },
     series: [{
       type: 'line',
@@ -529,11 +542,6 @@ export function generatePieOptions(config, data) {
       left: 'left'
     },
     color: colorPalette,
-    toolbox: {
-      feature: {
-        saveAsImage: { title: '画像保存' }
-      }
-    },
     series: [{
       type: 'pie',
       radius: donut ? ['40%', '70%'] : '70%',
@@ -597,11 +605,6 @@ export function generateScatterOptions(config, data) {
       containLabel: true
     },
     color: colorPalette,
-    toolbox: {
-      feature: {
-        saveAsImage: { title: '画像保存' }
-      }
-    },
     xAxis: {
       type: 'value',
       name: xAxis
@@ -664,11 +667,6 @@ export function generateComboOptions(config, data) {
       containLabel: true
     },
     color: colorPalette,
-    toolbox: {
-      feature: {
-        saveAsImage: { title: '画像保存' }
-      }
-    },
     xAxis: {
       type: 'category',
       data: categories
